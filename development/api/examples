@@ -1,0 +1,253 @@
+Wazuh API Examples
+
+This page contains **real, working** Wazuh API examples using `curl`. All examples assume:
+
+- You have API access enabled on your Wazuh manager.
+- You know the API user and password (or already have a token).
+- You have `jq` installed for pretty-printing JSON.
+
+> Replace `https://your-wazuh-manager:55000`, `wazuh`, and `wazuh-password` with your real values.
+
+---
+
+1. Authenticate and get a JWT token
+
+```bash
+# Wazuh API URL and credentials
+WAZUH_API="https://your-wazuh-manager:55000"
+USER="wazuh"
+PASSWORD="wazuh-password"
+
+Get JWT token
+TOKEN=$(curl -sku "$USER:$PASSWORD" -X GET \
+  "$WAZUH_API/security/user/authenticate" | jq -r '.data.token')
+
+echo "Token: $TOKEN"
+```
+
+---
+
+2. List all agents
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/agents" | jq
+```
+
+---
+
+3. Get agent details by ID
+
+```bash
+AGENT_ID="001"  # change to your agent ID
+
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/agents/$AGENT_ID" | jq
+```
+
+---
+
+4. Get only **active** agents
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/agents?status=active" | jq
+```
+
+---
+
+## 5. Restart Wazuh manager (cluster)
+
+```bash
+curl -k -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/cluster/restart" | jq
+```
+
+---
+
+## 6. List all rules
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/rules" | jq
+```
+
+---
+
+## 7. Get a specific rule by ID
+
+```bash
+RULE_ID="5710"  # example rule ID
+
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/rules/$RULE_ID" | jq
+```
+
+---
+
+## 8. List decoders
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/decoders" | jq
+```
+
+---
+
+## 9. Search alerts for the last 1 hour
+
+```bash
+curl -k -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "*",
+    "from": "now-1h",
+    "to": "now",
+    "filters": {}
+  }' \
+  "$WAZUH_API/alerts/search" | jq
+```
+
+---
+
+## 10. Search alerts for a specific agent
+
+```bash
+AGENT_ID="001"  # change to your agent ID
+
+curl -k -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "agent.id:'"$AGENT_ID"'",
+    "from": "now-24h",
+    "to": "now",
+    "filters": {}
+  }' \
+  "$WAZUH_API/alerts/search" | jq
+```
+
+---
+
+## 11. Get Wazuh cluster status
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/cluster/status" | jq
+```
+
+---
+
+## 12. Get manager info
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/manager/info" | jq
+```
+
+---
+
+## 13. Get Wazuh version (basic health check)
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/version" | jq
+```
+
+---
+
+## 14. Run an OS command on an agent (syscollector example)
+
+> Requires command module to be enabled and allowed.
+
+```bash
+AGENT_ID="001"  # change to your agent ID
+
+curl -k -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "syscollector",
+    "arguments": ["--help"],
+    "wait_for_complete": true
+  }' \
+  "$WAZUH_API/agents/$AGENT_ID/command" | jq
+```
+
+---
+
+## 15. List groups
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/groups" | jq
+```
+
+---
+
+## 16. Assign an agent to a group
+
+```bash
+AGENT_ID="001"       # change to your agent ID
+GROUP_NAME="default" # change to your group name
+
+curl -k -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/agents/$AGENT_ID/group/$GROUP_NAME" | jq
+```
+
+---
+
+## 17. List security configuration (CIS, policy monitoring, etc.)
+
+```bash
+curl -k -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "$WAZUH_API/security/config" | jq
+```
+
+---
+
+## 18. Example: simple Bash wrapper script
+
+```bash
+#!/usr/bin/env bash
+
+WAZUH_API="https://your-wazuh-manager:55000"
+USER="wazuh"
+PASSWORD="wazuh-password"
+
+get_token() {
+  TOKEN=$(curl -sku "$USER:$PASSWORD" -X GET \
+    "$WAZUH_API/security/user/authenticate" | jq -r '.data.token')
+}
+
+list_agents() {
+  curl -k -X GET \
+    -H "Authorization: Bearer $TOKEN" \
+    "$WAZUH_API/agents" | jq
+}
+
+get_token
+list_agents
+```
+
+---
+
+### Notes
+
+- Use `-k` only for testing with self-signed certificates; configure proper TLS in production.
+- Do **not** hard-code real passwords or tokens into scripts that are committed to Git.
+- For production, prefer environment variables, secrets managers, or CI/CD secrets over plaintext credentials.
